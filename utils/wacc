@@ -1,7 +1,8 @@
 import yfinance as yf
 import pandas as pd
 
-def get_market_return(ticker, start_date, end_date):
+# MARKET RETURM Rm # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+def get_market_return(MR_ticker, start_date, end_date):
     """
     Fetches historical market data for the given ticker (e.g., S&P 500) and calculates the annualized return.
     
@@ -14,7 +15,7 @@ def get_market_return(ticker, start_date, end_date):
     - annualized_return: float, the calculated annualized market return
     """
     # Retrieve market data
-    market = yf.Ticker(ticker)
+    market = yf.Ticker(MR_ticker)
     data = market.history(start=start_date, end=end_date)
     
     # Calculate the total return over the period (including dividends)
@@ -24,16 +25,15 @@ def get_market_return(ticker, start_date, end_date):
     annualized_return = ((1 + total_return) ** (1 / (len(data) / 252))) - 1
     return annualized_return
 
-# Example usage:
-ticker = "^GSPC"  # S&P 500 index ticker on Yahoo Finance
+MR_ticker = "^GSPC"  # S&P 500 index ticker on Yahoo Finance
 start_date = "2013-01-01"  # Start date for the historical data
 end_date = "2023-01-01"    # End date for the historical data
 
 # Get the market return
-market_return = get_market_return(ticker, start_date, end_date)
+market_return = get_market_return(MR_ticker, start_date, end_date)
 
-
-def get_risk_free_rate(ticker="^TNX"):
+# RISK FREE RATE Rf # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+def get_risk_free_rate(RF_ticker="^TNX"):
     """
     Fetches the latest risk-free rate (10-year U.S. Treasury yield) from Yahoo Finance.
     
@@ -44,17 +44,117 @@ def get_risk_free_rate(ticker="^TNX"):
     - risk_free_rate: float, the latest risk-free rate
     """
     # Retrieve data for the 10-year Treasury yield
-    treasury = yf.Ticker(ticker)
+    treasury = yf.Ticker(RF_ticker)
     data = treasury.history(period="1d")
     
     # The risk-free rate is the last closing price of the Treasury bond
     risk_free_rate = data['Close'].iloc[-1] / 100  # Convert from basis points to percentage
     return risk_free_rate
 
-# Example usage
-risk_free_rate = get_risk_free_rate(ticker="^TNX")  # You can replace with "^TNX" for 10-year Treasury yield
+risk_free_rate = get_risk_free_rate(RF_ticker="^TNX")  # You can replace with "^TNX" for 10-year Treasury yield
+
+# STOCK BETA (Change to stock ticker from GUI) # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+def get_stock_beta(ticker):
+    """
+    Fetches the beta value of a stock from Yahoo Finance.
+    
+    Parameters:
+    - ticker: str, the ticker symbol of the stock (e.g., "AAPL" for Apple)
+    
+    Returns:
+    - beta: float, the beta value of the stock
+    """
+    # Get the stock data
+    stock = yf.Ticker(ticker)
+    
+    # Fetch the stock's info
+    stock_info = stock.info
+    
+    # Extract the beta value from the stock info
+    beta = stock_info.get('beta', None)  # Returns None if beta is not available
+    
+    return beta
+
+ticker = "NUE"  # Replace with your desired stock ticker
+beta_value = get_stock_beta(ticker)
+
+
+# COST OF DEBT Rd # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+ticker = "NUE"  # Define the ticker symbol
+
+# Fetch the stock data
+stock = yf.Ticker(ticker)
+
+# Get the Income Statement to find Interest Expense
+income_statement = stock.financials
+interest_expense = income_statement.loc['Interest Expense'][0]  # Grab the first value (latest year)
+
+# Get the Balance Sheet to find Total Debt
+balance_sheet = stock.balance_sheet
+total_debt = balance_sheet.loc['Total Debt'][0]  # Grab the first value (latest year)
+
+# Calculate the Cost of Debt
+cost_of_debt = interest_expense / total_debt
+
+
+
+# TAX RATE # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+ticker = "NUE" # Define the ticker symbol
+
+# Fetch stock data
+stock = yf.Ticker(ticker)
+
+# Fetch the Income Statement
+income_statement = stock.financials
+
+# Try fetching tax rate (If unavailable, default to 25%)
+try:
+    # Extract Income Tax Expense and Pre-tax Income (EBIT)
+    income_tax_expense = income_statement.loc['Income Tax Expense'].iloc[0] if 'Income Tax Expense' in income_statement.index else None
+    pre_tax_income = income_statement.loc['Income Before Tax'].iloc[0] if 'Income Before Tax' in income_statement.index else None
+
+    # Calculate Tax Rate if data is available
+    if income_tax_expense is not None and pre_tax_income is not None:
+        tax_rate = income_tax_expense / pre_tax_income
+        print(f"Tax Rate: {tax_rate * 100}%")
+    else:
+        # If tax rate data is unavailable, use a default tax rate (e.g., 25%)
+        print("Tax rate data not available. Using default tax rate of 25%.")
+        tax_rate = 0.25
+
+except Exception as e:
+    # If something goes wrong, print an error and use a default tax rate
+    print(f"Error calculating tax rate: {e}")
+    print("Using default tax rate of 25%.")
+    tax_rate = 0.25
+
+# COST OF EQUITY Re # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+cost_of_equity = risk_free_rate + beta_value * (market_return - risk_free_rate)
+
+
+
+
+
 
 
 
 print(f"Risk-Free Rate: {risk_free_rate:.4f}")
-print(f"Market return for {ticker} from {start_date} to {end_date}: {market_return:.4f}")
+print(f"Market return for {MR_ticker} from {start_date} to {end_date}: {market_return:.4f}")
+print(f"The beta for {ticker} is: {beta_value}")
+print(f"Cost of Debt (Rd): {cost_of_debt * 100}%")
+print(f"Cost of Equity: {cost_of_equity * 100:.2f}%")
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Calculate the WACC
+
