@@ -54,34 +54,7 @@ def get_risk_free_rate(ticker="^TNX"):
 # Example usage
 risk_free_rate = get_risk_free_rate(ticker="^TNX")  # You can replace with "^TNX" for 10-year Treasury yield
 
-def get_stock_beta(ticker):
-    """
-    Fetches the beta value of a stock from Yahoo Finance.
-    
-    Parameters:
-    - ticker: str, the ticker symbol of the stock (e.g., "AAPL" for Apple)
-    
-    Returns:
-    - beta: float, the beta value of the stock
-    """
-    # Get the stock data
-    stock = yf.Ticker(ticker)
-    
-    # Fetch the stock's info
-    stock_info = stock.info
-    
-    # Extract the beta value from the stock info
-    beta = stock_info.get('beta', None)  # Returns None if beta is not available
-    
-    return beta
-
-# Example usage
-ticker = "AAPL"  # Replace with your desired stock ticker
-beta_value = get_stock_beta(ticker)
-
-
 
 
 print(f"Risk-Free Rate: {risk_free_rate:.4f}")
 print(f"Market return for {ticker} from {start_date} to {end_date}: {market_return:.4f}")
-print(f"The beta for {ticker} is: {beta_value}")
