@@ -1,5 +1,7 @@
 import yfinance as yf
 import pandas as pd
+import requests
+ticker = "NUE"
 
 # MARKET RETURM Rm # -----------------------------------------------------------------------------------------------------------------------------------------------------------
 def get_market_return(MR_ticker, start_date, end_date):
@@ -74,33 +76,41 @@ def get_stock_beta(ticker):
     beta = stock_info.get('beta', None)  # Returns None if beta is not available
     
     return beta
-
-ticker = "NUE"  # Replace with your desired stock ticker
 beta_value = get_stock_beta(ticker)
 
 
 # COST OF DEBT Rd # ----------------------------------------------------------------------------------------------------------------------------------------------------------
-ticker = "NUE"  # Define the ticker symbol
-
 # Fetch the stock data
 stock = yf.Ticker(ticker)
 
-# Get the Income Statement to find Interest Expense
+# Get the Income Statement and Balance Sheet
 income_statement = stock.financials
-interest_expense = income_statement.loc['Interest Expense'][0]  # Grab the first value (latest year)
-
-# Get the Balance Sheet to find Total Debt
 balance_sheet = stock.balance_sheet
-total_debt = balance_sheet.loc['Total Debt'][0]  # Grab the first value (latest year)
 
-# Calculate the Cost of Debt
-cost_of_debt = interest_expense / total_debt
+# Drop columns with NaN for both Interest Expense and Total Debt
+interest_expense_series = income_statement.loc['Interest Expense'].dropna()
+total_debt_series = balance_sheet.loc['Total Debt'].dropna()
+
+# Check if we have any data left
+if not interest_expense_series.empty and not total_debt_series.empty:
+    interest_expense = interest_expense_series.iloc[0]
+    total_debt = total_debt_series.iloc[0]
+    
+    # Only calculate if debt is non-zero
+    if total_debt != 0:
+        cost_of_debt = interest_expense / total_debt
+    else:
+        print("Total debt is zero. Setting cost of debt to 0.")
+        cost_of_debt = 0.0
+else:
+    print("Missing interest expense or total debt data. Setting cost of debt to 0.")
+    cost_of_debt = 0.0
+
+
 
 
 
 # TAX RATE # ----------------------------------------------------------------------------------------------------------------------------------------------------------
-ticker = "NUE" # Define the ticker symbol
-
 # Fetch stock data
 stock = yf.Ticker(ticker)
 
@@ -110,8 +120,8 @@ income_statement = stock.financials
 # Try fetching tax rate (If unavailable, default to 25%)
 try:
     # Extract Income Tax Expense and Pre-tax Income (EBIT)
-    income_tax_expense = income_statement.loc['Income Tax Expense'].iloc[0] if 'Income Tax Expense' in income_statement.index else None
-    pre_tax_income = income_statement.loc['Income Before Tax'].iloc[0] if 'Income Before Tax' in income_statement.index else None
+    income_tax_expense = income_statement.loc['Tax Provision'].iloc[0] if 'Tax Provision' in income_statement.index else None
+    pre_tax_income = income_statement.loc['Pretax Income'].iloc[0] if 'Pretax Income' in income_statement.index else None
 
     # Calculate Tax Rate if data is available
     if income_tax_expense is not None and pre_tax_income is not None:
@@ -131,6 +141,53 @@ except Exception as e:
 # COST OF EQUITY Re # ----------------------------------------------------------------------------------------------------------------------------------------------------------
 cost_of_equity = risk_free_rate + beta_value * (market_return - risk_free_rate)
 
+# TOTAL EQUITY AND DEBT # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+def get_equity_and_debt_yf(ticker):
+    """
+    Retrieves Total Debt and Total Equity (Common + Preferred) using yfinance's balance sheet.
+    
+    Parameters:
+    - ticker: str, the stock ticker symbol (e.g., "AAPL")
+    
+    Returns:
+    - dict with total_debt and total_equity (both as floats), or None if not found
+    """
+    stock = yf.Ticker(ticker)
+    balance_sheet = stock.balance_sheet
+
+    try:
+        # Drop NaNs and get the latest non-null value
+        total_debt_series = balance_sheet.loc['Total Debt'].dropna()
+        common_equity_series = balance_sheet.loc['Common Stock Equity'].dropna()
+        preferred_equity_series = balance_sheet.loc['Preferred Stock Equity'].dropna() if 'Preferred Stock Equity' in balance_sheet.index else None
+
+        if total_debt_series.empty or common_equity_series.empty:
+            raise ValueError("Missing Total Debt or Common Stock Equity in balance sheet.")
+
+        total_debt = total_debt_series.iloc[0]
+        common_equity = common_equity_series.iloc[0]
+        preferred_equity = preferred_equity_series.iloc[0] if preferred_equity_series is not None and not preferred_equity_series.empty else 0
+
+        total_equity = common_equity + preferred_equity
+
+        return {
+            "symbol": ticker.upper(),
+            "total_debt": total_debt,
+            "common_equity": common_equity,
+            "preferred_equity": preferred_equity,
+            "total_equity": total_equity
+        }
+
+    except Exception as e:
+        print(f"Error retrieving data for {ticker}: {e}")
+        return None
+
+# Example usage
+capital_structure = get_equity_and_debt_yf(ticker)
+
+
+
+
 
 
 
@@ -143,18 +200,13 @@ print(f"Market return for {MR_ticker} from {start_date} to {end_date}: {market_r
 print(f"The beta for {ticker} is: {beta_value}")
 print(f"Cost of Debt (Rd): {cost_of_debt * 100}%")
 print(f"Cost of Equity: {cost_of_equity * 100:.2f}%")
+print(capital_structure)
 
+# WACC CALCULATION # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+capital_structure = get_equity_and_debt_yf(ticker)
+E = capital_structure["total_equity"]
+D = capital_structure["total_debt"]
+V = E + D
 
-
-
-
-
-
-
-
-
-
-
-
-# Calculate the WACC
-
+wacc = (E / V) * cost_of_equity + (D / V) * cost_of_debt * (1 - tax_rate)
+print(f"WACC: {wacc * 100:.2f}%")
