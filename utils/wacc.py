@@ -1,9 +1,16 @@
+# ---------------------------------
+# Imports
+# ---------------------------------
+
 import yfinance as yf
 import pandas as pd
 import requests
-ticker = "NUE"
+ticker = "AMZN"
 
-# MARKET RETURM Rm # -----------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------
+# Market Return
+# ---------------------------------
+
 def get_market_return(MR_ticker, start_date, end_date):
     """
     Fetches historical market data for the given ticker (e.g., S&P 500) and calculates the annualized return.
@@ -34,7 +41,10 @@ end_date = "2023-01-01"    # End date for the historical data
 # Get the market return
 market_return = get_market_return(MR_ticker, start_date, end_date)
 
-# RISK FREE RATE Rf # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------
+# Risk Free Rate
+# ---------------------------------
+
 def get_risk_free_rate(RF_ticker="^TNX"):
     """
     Fetches the latest risk-free rate (10-year U.S. Treasury yield) from Yahoo Finance.
@@ -53,9 +63,12 @@ def get_risk_free_rate(RF_ticker="^TNX"):
     risk_free_rate = data['Close'].iloc[-1] / 100  # Convert from basis points to percentage
     return risk_free_rate
 
-risk_free_rate = get_risk_free_rate(RF_ticker="^TNX")  # You can replace with "^TNX" for 10-year Treasury yield
+risk_free_rate = get_risk_free_rate(RF_ticker="^TNX")
 
-# STOCK BETA (Change to stock ticker from GUI) # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------
+# Stock Beta
+# ---------------------------------
+
 def get_stock_beta(ticker):
     """
     Fetches the beta value of a stock from Yahoo Finance.
@@ -76,10 +89,14 @@ def get_stock_beta(ticker):
     beta = stock_info.get('beta', None)  # Returns None if beta is not available
     
     return beta
+
 beta_value = get_stock_beta(ticker)
 
 
-# COST OF DEBT Rd # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------
+# Cost of Debt
+# ---------------------------------
+
 # Fetch the stock data
 stock = yf.Ticker(ticker)
 
@@ -106,12 +123,10 @@ else:
     print("Missing interest expense or total debt data. Setting cost of debt to 0.")
     cost_of_debt = 0.0
 
+# ---------------------------------
+# Tax Rate
+# ---------------------------------
 
-
-
-
-# TAX RATE # ----------------------------------------------------------------------------------------------------------------------------------------------------------
-# Fetch stock data
 stock = yf.Ticker(ticker)
 
 # Fetch the Income Statement
@@ -126,7 +141,6 @@ try:
     # Calculate Tax Rate if data is available
     if income_tax_expense is not None and pre_tax_income is not None:
         tax_rate = income_tax_expense / pre_tax_income
-        print(f"Tax Rate: {tax_rate * 100}%")
     else:
         # If tax rate data is unavailable, use a default tax rate (e.g., 25%)
         print("Tax rate data not available. Using default tax rate of 25%.")
@@ -138,10 +152,16 @@ except Exception as e:
     print("Using default tax rate of 25%.")
     tax_rate = 0.25
 
-# COST OF EQUITY Re # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------
+# Cost of Equity
+# ---------------------------------
+
 cost_of_equity = risk_free_rate + beta_value * (market_return - risk_free_rate)
 
-# TOTAL EQUITY AND DEBT # ----------------------------------------------------------------------------------------------------------------------------------------------------------
+# ---------------------------------
+# Total Equity and Debt
+# ---------------------------------
+
 def get_equity_and_debt_yf(ticker):
     """
     Retrieves Total Debt and Total Equity (Common + Preferred) using yfinance's balance sheet.
@@ -182,31 +202,14 @@ def get_equity_and_debt_yf(ticker):
         print(f"Error retrieving data for {ticker}: {e}")
         return None
 
-# Example usage
-capital_structure = get_equity_and_debt_yf(ticker)
+# ---------------------------------
+# WACC Calculation
+# ---------------------------------
 
-
-
-
-
-
-
-
-
-
-
-print(f"Risk-Free Rate: {risk_free_rate:.4f}")
-print(f"Market return for {MR_ticker} from {start_date} to {end_date}: {market_return:.4f}")
-print(f"The beta for {ticker} is: {beta_value}")
-print(f"Cost of Debt (Rd): {cost_of_debt * 100}%")
-print(f"Cost of Equity: {cost_of_equity * 100:.2f}%")
-print(capital_structure)
-
-# WACC CALCULATION # ----------------------------------------------------------------------------------------------------------------------------------------------------------
 capital_structure = get_equity_and_debt_yf(ticker)
 E = capital_structure["total_equity"]
 D = capital_structure["total_debt"]
 V = E + D
 
 wacc = (E / V) * cost_of_equity + (D / V) * cost_of_debt * (1 - tax_rate)
-print(f"WACC: {wacc * 100:.2f}%")
+print(f"{ticker} WACC: {wacc * 100:.2f}%")
