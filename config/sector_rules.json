@@ -1,0 +1,82 @@
+{
+      "Industrials": {
+        "EV/EBITDA": 50,
+        "EV/Revenue": 20,
+        "P/E": 25,
+        "P/B": 5,
+        "notes": "EV/EBITDA dominates due to capex intensity; P/B rarely used."
+      },
+      "Basic Materials": {
+        "EV/EBITDA": 70,
+        "P/E": 5,
+        "EV/Revenue": 25,
+        "P/B": 0,
+        "notes": "EV/EBITDA is key; P/B less relevant."
+      },
+      "Technology": {
+        "EV/EBITDA": 40,
+        "EV/Revenue": 45,
+        "P/E": 10,
+        "P/B": 5,
+        "notes": "EV/Revenue weighted heavily for growth-stage firms."
+      },
+      "Financial Services": {
+        "P/E": 40,
+        "P/B": 60,
+        "EV/EBITDA": 0,
+        "EV/Revenue": 0,
+        "notes": "P/B is critical for banks; EV multiples irrelevant."
+      },
+      "Healthcare": {
+        "EV/EBITDA": 40,
+        "EV/Revenue": 45,
+        "P/E": 10,
+        "P/B": 5,
+        "notes": "EV/Revenue for biotech; EV/EBITDA for pharma."
+      },
+      "Communication Services": {
+        "EV/EBITDA": 50,
+        "EV/Revenue": 30,
+        "P/E": 15,
+        "P/B": 5
+      },
+      "Consumer Defensive": {
+        "EV/EBITDA": 45,
+        "P/E": 35,
+        "EV/Revenue": 15,
+        "P/B": 5
+      },
+      "Consumer Cyclical": {
+        "EV/EBITDA": 45,
+        "P/E": 35,
+        "EV/Revenue": 15,
+        "P/B": 5,
+        "notes": "Stable cash flows favor EV/EBITDA and P/E."
+      },
+      "Real Estate": {
+        "EV/EBITDA": 40,
+        "P/E": 30,
+        "EV/Revenue": 20,
+        "P/B": 10
+      },
+      "Energy": {
+        "EV/EBITDA": 55,
+        "P/E": 25,
+        "EV/Revenue": 10,
+        "P/B": 10,
+        "notes": "EV/EBITDA is king in capex-heavy sectors."
+      },
+      "Utilities": {
+        "EV/EBITDA": 50,
+        "P/E": 30,
+        "EV/Revenue": 10,
+        "P/B": 10
+      },
+      "default": {
+        "EV/EBITDA": 40,
+        "EV/Revenue": 30,
+        "P/E": 20,
+        "P/B": 10,
+        "notes": "Fallback weights if industry not specified."
+      }
+  }
