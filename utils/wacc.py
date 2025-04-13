@@ -5,7 +5,7 @@
 import yfinance as yf
 import pandas as pd
 import requests
-ticker = "AMZN"
+ticker = "AAPL"
 
 # ---------------------------------
 # Market Return
@@ -212,4 +212,47 @@ D = capital_structure["total_debt"]
 V = E + D
 
 wacc = (E / V) * cost_of_equity + (D / V) * cost_of_debt * (1 - tax_rate)
-print(f"{ticker} WACC: {wacc * 100:.2f}%")
+
+def get_wacc(ticker):
+    """
+    Calculates the Weighted Average Cost of Capital (WACC) for a given ticker.
+    
+    Returns:
+    - float: WACC as a decimal (e.g., 0.083 means 8.3%)
+    """
+    try:
+        market_return = get_market_return("^GSPC", "2013-01-01", "2023-01-01")
+        risk_free_rate = get_risk_free_rate("^TNX")
+        beta_value = get_stock_beta(ticker)
+
+        stock = yf.Ticker(ticker)
+        income_statement = stock.financials
+        balance_sheet = stock.balance_sheet
+
+        # Cost of Debt
+        interest_expense = income_statement.loc['Interest Expense'].dropna().iloc[0]
+        total_debt = balance_sheet.loc['Total Debt'].dropna().iloc[0]
+        cost_of_debt = interest_expense / total_debt if total_debt != 0 else 0.0
+
+        # Tax Rate
+        try:
+            tax_expense = income_statement.loc['Tax Provision'].iloc[0]
+            pretax_income = income_statement.loc['Pretax Income'].iloc[0]
+            tax_rate = tax_expense / pretax_income if pretax_income else 0.25
+        except:
+            tax_rate = 0.25
+
+        # Cost of Equity
+        cost_of_equity = risk_free_rate + beta_value * (market_return - risk_free_rate)
+
+        # Capital Structure
+        cap = get_equity_and_debt_yf(ticker)
+        E = cap["total_equity"]
+        D = cap["total_debt"]
+        V = E + D
+
+        return (E / V) * cost_of_equity + (D / V) * cost_of_debt * (1 - tax_rate)
+    
+    except Exception as e:
+        print(f"Failed to calculate WACC for {ticker}: {e}")
+        return None

@@ -9,8 +9,8 @@ import json
 # ---------------------------------
 # Configuration
 # ---------------------------------
-ticker = "NUE"
-csv_path = "C:/Users/aidan/Documents/StockProject/resources/nasdaq_screener_1744326661065.csv"
+ticker = "AAPL"
+csv_path = "C:/Users/aidan/Documents/StockProject/resources/Stocks.csv"
 weights_path = "C:/Users/aidan/Documents/StockProject/config/sector_rules.json"
 
 # ---------------------------------
@@ -79,6 +79,8 @@ for key, values in multiples.items():
         medians[key] = statistics.median(values)
     else:
         medians[key] = None
+
+exit_multiple = medians["EV/EBITDA"]
 
 # ---------------------------------
 # Get Target Stock Data
