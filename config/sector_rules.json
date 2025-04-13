@@ -12,8 +12,8 @@
     "P/E": 5,
     "EV/Revenue": 25,
     "P/B": 0,
-    "dcf_weight": 0.65,
-    "comps_weight": 0.35
+    "dcf_weight": 0.5,
+    "comps_weight": 0.5
   },
   "Technology": {
     "EV/EBITDA": 40,

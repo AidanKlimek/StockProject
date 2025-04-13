@@ -4,274 +4,260 @@
 
 import numpy as np
 import pandas as pd
-from wacc import get_wacc
 from fetch_data import get_capIQ_fcf_projections
-from prophet import Prophet
+from wacc import wacc
 import statistics
 import yfinance as yf
-from comps import exit_multiple
-from gui import ticker, base_weight, bull_weight, bear_weight
 
-# ---------------------------------
-# Configuration
-# ---------------------------------
+def dcf_valuation(ticker, base_weight, bull_weight, bear_weight, exit_multiple, wacc_value):
+    years = 10
+    capiq_fcf = get_capIQ_fcf_projections(ticker, years=years)
 
-years = 10
-wacc = get_wacc(ticker)
-capiq_fcf = get_capIQ_fcf_projections(ticker, years=years)
+    # Get sector from Yahoo Finance
+    import yfinance as yf
+    stock = yf.Ticker(ticker)
+    info = stock.info
+    sector = info.get("sector")
 
-# ---------------------------------
-# FCF Storing
-# ---------------------------------
-
-# Store base (CapIQ) case projections
-available_years = len(capiq_fcf)
-base_case_fcfs = pd.DataFrame({
-    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
-    "fcf": capiq_fcf[:available_years]
-})
-
-# Initialize Bull and Bear storage
-bull_case_fcfs = None
-bear_case_fcfs = None
-
-# Bull case (10% growth from CapIQ)
-growth_factor = 1.10
-bull_fcf_values = capiq_fcf[:available_years] * growth_factor
-bull_case_fcfs = pd.DataFrame({
-    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
-    "fcf": bull_fcf_values
-})
-
-# Bear case (10% reduction from CapIQ)
-reduction_factor = 0.90
-bear_fcf_values = capiq_fcf[:available_years] * reduction_factor
-bear_case_fcfs = pd.DataFrame({
-    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
-    "fcf": bear_fcf_values
-})
-
-# Convert to dicts for valuation use
-base_case_dict = dict(zip(base_case_fcfs["ds"].dt.year, base_case_fcfs["fcf"]))
-bull_case_dict = dict(zip(bull_case_fcfs["ds"].dt.year, bull_case_fcfs["fcf"]))
-bear_case_dict = dict(zip(bear_case_fcfs["ds"].dt.year, bear_case_fcfs["fcf"]))
-
-# ---------------------------------
-# Discounting FCFs
-# ---------------------------------
-
-def discount_fcfs(fcf_df, wacc, start_year=2025, end_year=2030):
-    """
-    Discount projected FCFs between start_year and end_year to present value using WACC.
+    # Skip DCF for financial companies
+    if "Financial Services" in sector:
+        return {"weighted_upside_exit": 0, "weighted_upside_ggm": 0}, f"Skipping DCF valuation for financial company: {ticker}"
     
-    Parameters:
-    - fcf_df (DataFrame): must have columns ['ds', 'fcf']
-    - wacc (float): Weighted Average Cost of Capital (e.g., 0.09 for 9%)
-    - start_year (int): the year to start discounting
-    - end_year (int): the year to stop discounting
+    prob_sum = base_weight + bull_weight + bear_weight
+    if abs(prob_sum - 1.0) > 0.01:
+        return {"weighted_upside_exit": 0, "weighted_upside_ggm": 0}, (
+            f"Error: Scenario probabilities must add up to 1. "
+            f"Current total: {prob_sum:.2f}"
+        )
 
-    Returns:
-    - float: total present value of selected forecasted FCFs
-    - list of discounted FCFs for transparency or debugging
-    """
-    # Filter the DataFrame to only include rows within the specified year range
-    filtered_df = fcf_df[fcf_df["ds"].dt.year.between(start_year, end_year)]
-    filtered_df = filtered_df.sort_values("ds").reset_index(drop=True)
+    # FCF Storing
 
-    discounted_fcfs = []
+    # Store base (CapIQ) case projections
+    available_years = len(capiq_fcf)
+    base_case_fcfs = pd.DataFrame({
+        "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
+        "fcf": capiq_fcf[:available_years]
+    })
 
-    for i, row in enumerate(filtered_df.itertuples(), start=1):
-        fcf = row.fcf
-        discounted = fcf / ((1 + wacc) ** i)
-        discounted_fcfs.append(discounted)
+    # Initialize Bull and Bear storage
+    bull_case_fcfs = None
+    bear_case_fcfs = None
 
-    total_pv = sum(discounted_fcfs)
-    return total_pv, discounted_fcfs
+    # Bull case (10% growth from CapIQ)
+    growth_factor = 1.10
+    bull_fcf_values = capiq_fcf[:available_years] * growth_factor
+    bull_case_fcfs = pd.DataFrame({
+        "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
+        "fcf": bull_fcf_values
+    })
 
+    # Bear case (10% reduction from CapIQ)
+    reduction_factor = 0.90
+    bear_fcf_values = capiq_fcf[:available_years] * reduction_factor
+    bear_case_fcfs = pd.DataFrame({
+        "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
+        "fcf": bear_fcf_values
+    })
 
-# Apply only 2025–2030 values
-pv_base, disc_base = discount_fcfs(base_case_fcfs, wacc)
-pv_bull, disc_bull = discount_fcfs(bull_case_fcfs, wacc)
-pv_bear, disc_bear = discount_fcfs(bear_case_fcfs, wacc)
+    # Convert to dicts for valuation use
+    base_case_dict = dict(zip(base_case_fcfs["ds"].dt.year, base_case_fcfs["fcf"]))
+    bull_case_dict = dict(zip(bull_case_fcfs["ds"].dt.year, bull_case_fcfs["fcf"]))
+    bear_case_dict = dict(zip(bear_case_fcfs["ds"].dt.year, bear_case_fcfs["fcf"]))
 
-# ---------------------------------
-# Terminal Value Calculation (Exit and GGM)
-# ---------------------------------
-
-def calculate_terminal_value_ggm(final_year_fcf, wacc, perpetuity_growth_rate=0.025):
-    """
-    Calculates terminal value using Gordon Growth Model.
+    def discount_fcfs(fcf_df, wacc_value, start_year=2025, end_year=2030):
+        """
+        Discount projected FCFs between start_year and end_year to present value using WACC.
     
-    Parameters:
-    - final_year_fcf (float): the last projected year’s FCF (e.g., 2030)
-    - wacc (float): Weighted Average Cost of Capital
-    - perpetuity_growth_rate (float): growth rate beyond projection (default 2.5%)
+        Parameters:
+        - fcf_df (DataFrame): must have columns ['ds', 'fcf']
+        - wacc (float): Weighted Average Cost of Capital (e.g., 0.09 for 9%)
+        - start_year (int): the year to start discounting
+        - end_year (int): the year to stop discounting
 
-    Returns:
-    - Terminal value at the end of final projection year (not discounted)
-    """
-    if wacc <= perpetuity_growth_rate:
-        raise ValueError("WACC must be greater than the perpetuity growth rate.")
+        Returns:
+        - float: total present value of selected forecasted FCFs
+        - list of discounted FCFs for transparency or debugging
+        """
+        # Filter the DataFrame to only include rows within the specified year range
+        filtered_df = fcf_df[fcf_df["ds"].dt.year.between(start_year, end_year)]
+        filtered_df = filtered_df.sort_values("ds").reset_index(drop=True)
 
-    return (final_year_fcf * (1 + perpetuity_growth_rate)) / (wacc - perpetuity_growth_rate)
+        discounted_fcfs = []
 
-def calculate_terminal_value_exit_multiple(final_year_fcf, exit_multiple):
-    """
-    Calculates terminal value using the Exit Multiple method.
+        for i, row in enumerate(filtered_df.itertuples(), start=1):
+            fcf = row.fcf
+            discounted = fcf / ((1 + wacc_value) ** i)
+            discounted_fcfs.append(discounted)
+
+        total_pv = sum(discounted_fcfs)
+        return total_pv, discounted_fcfs
     
-    Parameters:
-    - final_year_fcf (float): the last projected year’s FCF (e.g., 2030)
-    - exit_multiple (float): multiple applied to the final year’s cash flow (e.g., 15x)
+    # Apply only 2025–2030 values
+    pv_base, disc_base = discount_fcfs(base_case_fcfs, wacc_value)
+    pv_bull, disc_bull = discount_fcfs(bull_case_fcfs, wacc_value)
+    pv_bear, disc_bear = discount_fcfs(bear_case_fcfs, wacc_value)
 
-    Returns:
-    - Terminal value at the end of projection period (not discounted)
-    """
-    return final_year_fcf * exit_multiple
+    def calculate_terminal_value_ggm(final_year_fcf, wacc_value, perpetuity_growth_rate=0.025):
+        """
+        Calculates terminal value using Gordon Growth Model.
+    
+        Parameters:
+        - final_year_fcf (float): the last projected year’s FCF (e.g., 2030)
+        - wacc (float): Weighted Average Cost of Capital
+        - perpetuity_growth_rate (float): growth rate beyond projection (default 2.5%)
 
-final_year_base = base_case_fcfs["ds"].dt.year.max()
-final_year_bull = bull_case_fcfs["ds"].dt.year.max()
-final_year_bear = bear_case_fcfs["ds"].dt.year.max()
+        Returns:
+        - Terminal value at the end of final projection year (not discounted)
+        """
+        if wacc_value <= perpetuity_growth_rate:
+            raise ValueError("WACC must be greater than the perpetuity growth rate.")
 
-# Extract final year FCF (2030) for each case
-final_year_fcf_base = base_case_fcfs[base_case_fcfs["ds"].dt.year == final_year_base]["fcf"].values[0]
-final_year_fcf_bull = bull_case_fcfs[bull_case_fcfs["ds"].dt.year == final_year_bull]["fcf"].values[0]
-final_year_fcf_bear = bear_case_fcfs[bear_case_fcfs["ds"].dt.year == final_year_bear]["fcf"].values[0]
+        return (final_year_fcf * (1 + perpetuity_growth_rate)) / (wacc_value - perpetuity_growth_rate)
 
-# Terminal Values for each case
-terminal_value_ggm_base = calculate_terminal_value_ggm(final_year_fcf_base, wacc)
-terminal_value_exit_base = calculate_terminal_value_exit_multiple(final_year_fcf_base, exit_multiple)
+    def calculate_terminal_value_exit_multiple(final_year_fcf, exit_multiple):
+        """
+        Calculates terminal value using the Exit Multiple method.
+    
+        Parameters:
+        - final_year_fcf (float): the last projected year’s FCF (e.g., 2030)
+        - exit_multiple (float): multiple applied to the final year’s cash flow (e.g., 15x)
 
-terminal_value_ggm_bull = calculate_terminal_value_ggm(final_year_fcf_bull, wacc)
-terminal_value_exit_bull = calculate_terminal_value_exit_multiple(final_year_fcf_bull, exit_multiple) 
+        Returns:
+        - Terminal value at the end of projection period (not discounted)
+        """
+        return final_year_fcf * exit_multiple
 
-terminal_value_ggm_bear = calculate_terminal_value_ggm(final_year_fcf_bear, wacc) 
-terminal_value_exit_bear = calculate_terminal_value_exit_multiple(final_year_fcf_bear, exit_multiple)
+    final_year_base = base_case_fcfs["ds"].dt.year.max()
+    final_year_bull = bull_case_fcfs["ds"].dt.year.max()
+    final_year_bear = bear_case_fcfs["ds"].dt.year.max()
 
-# ---------------------------------
-# Discount Terminal Values
-# ---------------------------------
+    # Extract final year FCF (2030) for each case
+    final_year_fcf_base = base_case_fcfs[base_case_fcfs["ds"].dt.year == final_year_base]["fcf"].values[0]
+    final_year_fcf_bull = bull_case_fcfs[bull_case_fcfs["ds"].dt.year == final_year_bull]["fcf"].values[0]
+    final_year_fcf_bear = bear_case_fcfs[bear_case_fcfs["ds"].dt.year == final_year_bear]["fcf"].values[0]
 
-def discount_terminal_value(terminal_value, wacc, periods=6):
-    """
-    Discount a terminal value to present value.
+    # Terminal Values for each case
+    terminal_value_ggm_base = calculate_terminal_value_ggm(final_year_fcf_base, wacc_value)
+    terminal_value_exit_base = calculate_terminal_value_exit_multiple(final_year_fcf_base, exit_multiple)
 
-    Parameters:
-    - terminal_value (float): Value at the end of the projection period
-    - wacc (float): Weighted Average Cost of Capital (e.g., 0.09)
-    - periods (int): Number of years from 2025 to 2030
+    terminal_value_ggm_bull = calculate_terminal_value_ggm(final_year_fcf_bull, wacc_value)
+    terminal_value_exit_bull = calculate_terminal_value_exit_multiple(final_year_fcf_bull, exit_multiple) 
 
-    Returns:
-    - float: Present value of terminal value
-    """
-    return terminal_value / ((1 + wacc) ** periods)
+    terminal_value_ggm_bear = calculate_terminal_value_ggm(final_year_fcf_bear, wacc_value) 
+    terminal_value_exit_bear = calculate_terminal_value_exit_multiple(final_year_fcf_bear, exit_multiple)
 
-# Discount terminal values
-disc_tv_ggm_bull = discount_terminal_value(terminal_value_ggm_bull, wacc)
-disc_tv_exit_bull = discount_terminal_value(terminal_value_exit_bull, wacc)
+    def discount_terminal_value(terminal_value, wacc_value, periods=6):
+        """
+        Discount a terminal value to present value.
 
-disc_tv_ggm_base = discount_terminal_value(terminal_value_ggm_base, wacc)
-disc_tv_exit_base = discount_terminal_value(terminal_value_exit_base, wacc)
+        Parameters:
+        - terminal_value (float): Value at the end of the projection period
+        - wacc (float): Weighted Average Cost of Capital (e.g., 0.09)
+        - periods (int): Number of years from 2025 to 2030
 
-disc_tv_ggm_bear = discount_terminal_value(terminal_value_ggm_bear, wacc)
-disc_tv_exit_bear = discount_terminal_value(terminal_value_exit_bear, wacc)
+        Returns:
+        - float: Present value of terminal value
+        """
+        return terminal_value / ((1 + wacc_value) ** periods)
 
-# ---------------------------------
-# Calculate Enterprise Values
-# ---------------------------------
+    # Discount terminal values
+    disc_tv_ggm_bull = discount_terminal_value(terminal_value_ggm_bull, wacc_value)
+    disc_tv_exit_bull = discount_terminal_value(terminal_value_exit_bull, wacc_value)
 
-ev_bull_ggm = pv_bull + disc_tv_ggm_bull
-ev_bull_exit = pv_bull + disc_tv_exit_bull
+    disc_tv_ggm_base = discount_terminal_value(terminal_value_ggm_base, wacc_value)
+    disc_tv_exit_base = discount_terminal_value(terminal_value_exit_base, wacc_value)
 
-ev_base_ggm = pv_base + disc_tv_ggm_base
-ev_base_exit = pv_base + disc_tv_exit_base
+    disc_tv_ggm_bear = discount_terminal_value(terminal_value_ggm_bear, wacc_value)
+    disc_tv_exit_bear = discount_terminal_value(terminal_value_exit_bear, wacc_value)
 
-ev_bear_ggm = pv_bear + disc_tv_ggm_bear
-ev_bear_exit = pv_bear + disc_tv_exit_bear
+    # Calculate Enterprise Values
+    ev_bull_ggm = pv_bull + disc_tv_ggm_bull
+    ev_bull_exit = pv_bull + disc_tv_exit_bull
 
-# ---------------------------------
-# Stock Info
-# ---------------------------------
+    ev_base_ggm = pv_base + disc_tv_ggm_base
+    ev_base_exit = pv_base + disc_tv_exit_base
 
-stock = yf.Ticker(ticker)
-info = stock.info
-income_statement = stock.financials
-balance_sheet = stock.balance_sheet
-shares_outstanding = info.get("sharesOutstanding")
-cash_equivalents = balance_sheet.loc['Cash And Cash Equivalents'].dropna()
-total_debt = balance_sheet.loc['Total Debt'].dropna()
-current_price = info.get("currentPrice")
+    ev_bear_ggm = pv_bear + disc_tv_ggm_bear
+    ev_bear_exit = pv_bear + disc_tv_exit_bear
 
-# ---------------------------------
-# Calculate Equity Value
-# ---------------------------------
+    # Stock Info
+    stock = yf.Ticker(ticker)
+    info = stock.info
+    income_statement = stock.financials
+    balance_sheet = stock.balance_sheet
+    shares_outstanding = info.get("sharesOutstanding")
+    cash_equivalents = balance_sheet.loc['Cash And Cash Equivalents'].dropna()
+    total_debt = balance_sheet.loc['Total Debt'].dropna()
+    current_price = info.get("currentPrice")
 
-def calc_equity_value(ev, total_debt, cash_equivalents):
-    return ev - total_debt + cash_equivalents
+    # Calculate Equity Value
+    def calc_equity_value(ev, total_debt, cash_equivalents):
+        return ev - total_debt + cash_equivalents
 
-# Bull case
-equity_bull_ggm = calc_equity_value(ev_bull_ggm, total_debt, cash_equivalents)
-equity_bull_exit = calc_equity_value(ev_bull_exit, total_debt, cash_equivalents)
+    # Bull case
+    equity_bull_ggm = calc_equity_value(ev_bull_ggm, total_debt, cash_equivalents)
+    equity_bull_exit = calc_equity_value(ev_bull_exit, total_debt, cash_equivalents)
 
-# Base case
-equity_base_ggm = calc_equity_value(ev_base_ggm, total_debt, cash_equivalents)
-equity_base_exit = calc_equity_value(ev_base_exit, total_debt, cash_equivalents)
+    # Base case
+    equity_base_ggm = calc_equity_value(ev_base_ggm, total_debt, cash_equivalents)
+    equity_base_exit = calc_equity_value(ev_base_exit, total_debt, cash_equivalents)
 
-# Bear case
-equity_bear_ggm = calc_equity_value(ev_bear_ggm, total_debt, cash_equivalents)
-equity_bear_exit = calc_equity_value(ev_bear_exit, total_debt, cash_equivalents)
+    # Bear case
+    equity_bear_ggm = calc_equity_value(ev_bear_ggm, total_debt, cash_equivalents)
+    equity_bear_exit = calc_equity_value(ev_bear_exit, total_debt, cash_equivalents)
 
-# ---------------------------------
-# Calculate Fair Value
-# ---------------------------------
+    # Calculate Fair Value
+    def fair_value_per_share(equity_value, shares_outstanding):
+        return equity_value / shares_outstanding
 
-def fair_value_per_share(equity_value, shares_outstanding):
-    return equity_value / shares_outstanding
+    # Bull case
+    fair_price_bull_ggm = fair_value_per_share(equity_bull_ggm, shares_outstanding)
+    fair_price_bull_exit = fair_value_per_share(equity_bull_exit, shares_outstanding)
 
-# Bull case
-fair_price_bull_ggm = fair_value_per_share(equity_bull_ggm, shares_outstanding)
-fair_price_bull_exit = fair_value_per_share(equity_bull_exit, shares_outstanding)
+    # Base case
+    fair_price_base_ggm = fair_value_per_share(equity_base_ggm, shares_outstanding)
+    fair_price_base_exit = fair_value_per_share(equity_base_exit, shares_outstanding)
 
-# Base case
-fair_price_base_ggm = fair_value_per_share(equity_base_ggm, shares_outstanding)
-fair_price_base_exit = fair_value_per_share(equity_base_exit, shares_outstanding)
+    # Bear case
+    fair_price_bear_ggm = fair_value_per_share(equity_bear_ggm, shares_outstanding)
+    fair_price_bear_exit = fair_value_per_share(equity_bear_exit, shares_outstanding)
 
-# Bear case
-fair_price_bear_ggm = fair_value_per_share(equity_bear_ggm, shares_outstanding)
-fair_price_bear_exit = fair_value_per_share(equity_bear_exit, shares_outstanding)
+    # Convert from Series to Scalar
+    fair_price_bull_ggm_value = fair_price_bull_ggm.iloc[0] if isinstance(fair_price_bull_ggm, pd.Series) else fair_price_bull_ggm
+    fair_price_base_ggm_value = fair_price_base_ggm.iloc[0] if isinstance(fair_price_base_ggm, pd.Series) else fair_price_base_ggm
+    fair_price_bear_ggm_value = fair_price_bear_ggm.iloc[0] if isinstance(fair_price_bear_ggm, pd.Series) else fair_price_bear_ggm
 
-# ---------------------------------
-# Convert from Series to Scalar
-# ---------------------------------
+    fair_price_bull_exit_value = fair_price_bull_exit.iloc[0] if isinstance(fair_price_bull_exit, pd.Series) else fair_price_bull_exit
+    fair_price_base_exit_value = fair_price_base_exit.iloc[0] if isinstance(fair_price_base_exit, pd.Series) else fair_price_base_exit
+    fair_price_bear_exit_value = fair_price_bear_exit.iloc[0] if isinstance(fair_price_bear_exit, pd.Series) else fair_price_bear_exit
 
-fair_price_bull_ggm_value = fair_price_bull_ggm.iloc[0] if isinstance(fair_price_bull_ggm, pd.Series) else fair_price_bull_ggm
-fair_price_base_ggm_value = fair_price_base_ggm.iloc[0] if isinstance(fair_price_base_ggm, pd.Series) else fair_price_base_ggm
-fair_price_bear_ggm_value = fair_price_bear_ggm.iloc[0] if isinstance(fair_price_bear_ggm, pd.Series) else fair_price_bear_ggm
+    # Upside Calculation
+    def calculate_upside(fair_price, current_price):
+        return (fair_price - current_price) / current_price * 100
 
-fair_price_bull_exit_value = fair_price_bull_exit.iloc[0] if isinstance(fair_price_bull_exit, pd.Series) else fair_price_bull_exit
-fair_price_base_exit_value = fair_price_base_exit.iloc[0] if isinstance(fair_price_base_exit, pd.Series) else fair_price_base_exit
-fair_price_bear_exit_value = fair_price_bear_exit.iloc[0] if isinstance(fair_price_bear_exit, pd.Series) else fair_price_bear_exit
+    upside_bull_ggm = calculate_upside(fair_price_bull_ggm_value, current_price)
+    upside_base_ggm = calculate_upside(fair_price_base_ggm_value, current_price)
+    upside_bear_ggm = calculate_upside(fair_price_bear_ggm_value, current_price)
 
-# ---------------------------------
-# Upside Calculation
-# ---------------------------------
+    upside_bull_exit = calculate_upside(fair_price_bull_exit_value, current_price)
+    upside_base_exit = calculate_upside(fair_price_base_exit_value, current_price)
+    upside_bear_exit = calculate_upside(fair_price_bear_exit_value, current_price)
 
-def calculate_upside(fair_price, current_price):
-    return (fair_price - current_price) / current_price * 100
+    # Weighted Upside Calculation
 
-upside_bull_ggm = calculate_upside(fair_price_bull_ggm_value, current_price)
-upside_base_ggm = calculate_upside(fair_price_base_ggm_value, current_price)
-upside_bear_ggm = calculate_upside(fair_price_bear_ggm_value, current_price)
+    weighted_upside_ggm = (base_weight * upside_base_ggm) + (bull_weight * upside_bull_ggm) + (bear_weight * upside_bear_ggm)
+    weighted_upside_exit = (base_weight * upside_base_exit) + (bull_weight * upside_bull_exit) + (bear_weight * upside_bear_exit)
 
-upside_bull_exit = calculate_upside(fair_price_bull_exit_value, current_price)
-upside_base_exit = calculate_upside(fair_price_base_exit_value, current_price)
-upside_bear_exit = calculate_upside(fair_price_bear_exit_value, current_price)
+    results = {
+        "weighted_upside_ggm": weighted_upside_ggm,
+        "weighted_upside_exit": weighted_upside_exit
+    }
 
-# ---------------------------------
-# Weighted Upside Calculation
-# ---------------------------------
+    return results, ""
 
-weighted_upside_ggm = (base_weight * upside_base_ggm) + (bull_weight * upside_bull_ggm) + (bear_weight * upside_bear_ggm)
-weighted_upside_exit = (base_weight * upside_base_exit) + (bull_weight * upside_bull_exit) + (bear_weight * upside_bear_exit)
+
+
+
 
 
 
