@@ -145,5 +145,6 @@ def comp_valuation(ticker):
 
     return {
         "median_ev_ebitda": exit_multiple,
-        "implied_upside": comps_implied_upside
+        "implied_upside": comps_implied_upside,
+        "peers": peer_symbols
 }
