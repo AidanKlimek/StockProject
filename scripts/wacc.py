@@ -5,7 +5,7 @@
 import yfinance as yf
 import pandas as pd
 import requests
-ticker = "AAPL"
+from gui import ticker
 
 # ---------------------------------
 # Market Return

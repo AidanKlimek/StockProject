@@ -7,12 +7,12 @@ import yfinance as yf
 from comps import comps_implied_upside
 from dcf import weighted_upside_ggm
 from dcf import weighted_upside_exit
+from gui import ticker
 
 # ---------------------------------
 # Configuration
 # ---------------------------------
 
-ticker = "AAPL"
 weights_path = "C:/Users/aidan/Documents/StockProject/config/sector_rules.json"
 
 # ---------------------------------

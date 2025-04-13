@@ -10,12 +10,12 @@ from prophet import Prophet
 import statistics
 import yfinance as yf
 from comps import exit_multiple
+from gui import ticker, base_weight, bull_weight, bear_weight
 
 # ---------------------------------
 # Configuration
 # ---------------------------------
 
-ticker = "AAPL"
 years = 10
 wacc = get_wacc(ticker)
 capiq_fcf = get_capIQ_fcf_projections(ticker, years=years)
@@ -27,7 +27,7 @@ capiq_fcf = get_capIQ_fcf_projections(ticker, years=years)
 # Store base (CapIQ) case projections
 available_years = len(capiq_fcf)
 base_case_fcfs = pd.DataFrame({
-    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="Y"),
+    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
     "fcf": capiq_fcf[:available_years]
 })
 
@@ -39,7 +39,7 @@ bear_case_fcfs = None
 growth_factor = 1.10
 bull_fcf_values = capiq_fcf[:available_years] * growth_factor
 bull_case_fcfs = pd.DataFrame({
-    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="Y"),
+    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
     "fcf": bull_fcf_values
 })
 
@@ -47,7 +47,7 @@ bull_case_fcfs = pd.DataFrame({
 reduction_factor = 0.90
 bear_fcf_values = capiq_fcf[:available_years] * reduction_factor
 bear_case_fcfs = pd.DataFrame({
-    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="Y"),
+    "ds": pd.date_range(start="2025-12-31", periods=available_years, freq="YE"),
     "fcf": bear_fcf_values
 })
 
@@ -139,13 +139,13 @@ final_year_fcf_bear = bear_case_fcfs[bear_case_fcfs["ds"].dt.year == final_year_
 
 # Terminal Values for each case
 terminal_value_ggm_base = calculate_terminal_value_ggm(final_year_fcf_base, wacc)
-terminal_value_exit_base = calculate_terminal_value_exit_multiple(final_year_fcf_base, exit_multiple=15)
+terminal_value_exit_base = calculate_terminal_value_exit_multiple(final_year_fcf_base, exit_multiple)
 
 terminal_value_ggm_bull = calculate_terminal_value_ggm(final_year_fcf_bull, wacc)
-terminal_value_exit_bull = calculate_terminal_value_exit_multiple(final_year_fcf_bull, exit_multiple=15) 
+terminal_value_exit_bull = calculate_terminal_value_exit_multiple(final_year_fcf_bull, exit_multiple) 
 
 terminal_value_ggm_bear = calculate_terminal_value_ggm(final_year_fcf_bear, wacc) 
-terminal_value_exit_bear = calculate_terminal_value_exit_multiple(final_year_fcf_bear, exit_multiple=15)
+terminal_value_exit_bear = calculate_terminal_value_exit_multiple(final_year_fcf_bear, exit_multiple)
 
 # ---------------------------------
 # Discount Terminal Values
@@ -270,17 +270,8 @@ upside_bear_exit = calculate_upside(fair_price_bear_exit_value, current_price)
 # Weighted Upside Calculation
 # ---------------------------------
 
-weights = {
-    "base": 0.50,
-    "bull": 0.40,
-    "bear": 0.10
-}
-
-weighted_upside_ggm = (weights["base"] * upside_base_ggm) + (weights["bull"] * upside_bull_ggm) + (weights["bear"] * upside_bear_ggm)
-weighted_upside_exit = (weights["base"] * upside_base_exit) + (weights["bull"] * upside_bull_exit) + (weights["bear"] * upside_bear_exit)
-
-
-
+weighted_upside_ggm = (base_weight * upside_base_ggm) + (bull_weight * upside_bull_ggm) + (bear_weight * upside_bear_ggm)
+weighted_upside_exit = (base_weight * upside_base_exit) + (bull_weight * upside_bull_exit) + (bear_weight * upside_bear_exit)
 
 
 

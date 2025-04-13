@@ -5,11 +5,12 @@ import pandas as pd
 import yfinance as yf
 import statistics
 import json
+from gui import ticker
 
 # ---------------------------------
 # Configuration
 # ---------------------------------
-ticker = "AAPL"
+
 csv_path = "C:/Users/aidan/Documents/StockProject/resources/Stocks.csv"
 weights_path = "C:/Users/aidan/Documents/StockProject/config/sector_rules.json"
 
