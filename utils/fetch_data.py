@@ -1,5 +1,13 @@
+# ---------------------------------
+# Imports
+# ---------------------------------
+
 import yfinance as yf
 import pandas as pd
+
+# ---------------------------------
+# CapIQ FCF Projections Import
+# ---------------------------------
 
 def get_capIQ_fcf_projections(ticker, forecast_path="C:/Users/aidan/Documents/StockProject/resources/Stock FCF Projections.csv", years=5):
     """

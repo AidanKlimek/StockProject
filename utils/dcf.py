@@ -1,3 +1,7 @@
+# ---------------------------------
+# Imports
+# ---------------------------------
+
 import numpy as np
 import pandas as pd
 from wacc import get_wacc
@@ -7,14 +11,18 @@ import statistics
 import yfinance as yf
 from comps import exit_multiple
 
+# ---------------------------------
+# Configuration
+# ---------------------------------
 
 ticker = "AAPL"
 years = 10
 wacc = get_wacc(ticker)
-
 capiq_fcf = get_capIQ_fcf_projections(ticker, years=years)
 
-
+# ---------------------------------
+# FCF Storing
+# ---------------------------------
 
 # Store base (CapIQ) case projections
 available_years = len(capiq_fcf)
@@ -23,11 +31,11 @@ base_case_fcfs = pd.DataFrame({
     "fcf": capiq_fcf[:available_years]
 })
 
-# Initialize storage
+# Initialize Bull and Bear storage
 bull_case_fcfs = None
 bear_case_fcfs = None
 
-
+# Bull case (10% growth from CapIQ)
 growth_factor = 1.10
 bull_fcf_values = capiq_fcf[:available_years] * growth_factor
 bull_case_fcfs = pd.DataFrame({
@@ -35,7 +43,7 @@ bull_case_fcfs = pd.DataFrame({
     "fcf": bull_fcf_values
 })
 
-    # Bear case (10% reduction from CapIQ)
+# Bear case (10% reduction from CapIQ)
 reduction_factor = 0.90
 bear_fcf_values = capiq_fcf[:available_years] * reduction_factor
 bear_case_fcfs = pd.DataFrame({
@@ -47,6 +55,10 @@ bear_case_fcfs = pd.DataFrame({
 base_case_dict = dict(zip(base_case_fcfs["ds"].dt.year, base_case_fcfs["fcf"]))
 bull_case_dict = dict(zip(bull_case_fcfs["ds"].dt.year, bull_case_fcfs["fcf"]))
 bear_case_dict = dict(zip(bear_case_fcfs["ds"].dt.year, bear_case_fcfs["fcf"]))
+
+# ---------------------------------
+# Discounting FCFs
+# ---------------------------------
 
 def discount_fcfs(fcf_df, wacc, start_year=2025, end_year=2030):
     """
@@ -81,6 +93,10 @@ def discount_fcfs(fcf_df, wacc, start_year=2025, end_year=2030):
 pv_base, disc_base = discount_fcfs(base_case_fcfs, wacc)
 pv_bull, disc_bull = discount_fcfs(bull_case_fcfs, wacc)
 pv_bear, disc_bear = discount_fcfs(bear_case_fcfs, wacc)
+
+# ---------------------------------
+# Terminal Value Calculation (Exit and GGM)
+# ---------------------------------
 
 def calculate_terminal_value_ggm(final_year_fcf, wacc, perpetuity_growth_rate=0.025):
     """
@@ -131,6 +147,10 @@ terminal_value_exit_bull = calculate_terminal_value_exit_multiple(final_year_fcf
 terminal_value_ggm_bear = calculate_terminal_value_ggm(final_year_fcf_bear, wacc) 
 terminal_value_exit_bear = calculate_terminal_value_exit_multiple(final_year_fcf_bear, exit_multiple=15)
 
+# ---------------------------------
+# Discount Terminal Values
+# ---------------------------------
+
 def discount_terminal_value(terminal_value, wacc, periods=6):
     """
     Discount a terminal value to present value.
@@ -155,6 +175,10 @@ disc_tv_exit_base = discount_terminal_value(terminal_value_exit_base, wacc)
 disc_tv_ggm_bear = discount_terminal_value(terminal_value_ggm_bear, wacc)
 disc_tv_exit_bear = discount_terminal_value(terminal_value_exit_bear, wacc)
 
+# ---------------------------------
+# Calculate Enterprise Values
+# ---------------------------------
+
 ev_bull_ggm = pv_bull + disc_tv_ggm_bull
 ev_bull_exit = pv_bull + disc_tv_exit_bull
 
@@ -164,6 +188,10 @@ ev_base_exit = pv_base + disc_tv_exit_base
 ev_bear_ggm = pv_bear + disc_tv_ggm_bear
 ev_bear_exit = pv_bear + disc_tv_exit_bear
 
+# ---------------------------------
+# Stock Info
+# ---------------------------------
+
 stock = yf.Ticker(ticker)
 info = stock.info
 income_statement = stock.financials
@@ -172,6 +200,10 @@ shares_outstanding = info.get("sharesOutstanding")
 cash_equivalents = balance_sheet.loc['Cash And Cash Equivalents'].dropna()
 total_debt = balance_sheet.loc['Total Debt'].dropna()
 current_price = info.get("currentPrice")
+
+# ---------------------------------
+# Calculate Equity Value
+# ---------------------------------
 
 def calc_equity_value(ev, total_debt, cash_equivalents):
     return ev - total_debt + cash_equivalents
@@ -188,6 +220,10 @@ equity_base_exit = calc_equity_value(ev_base_exit, total_debt, cash_equivalents)
 equity_bear_ggm = calc_equity_value(ev_bear_ggm, total_debt, cash_equivalents)
 equity_bear_exit = calc_equity_value(ev_bear_exit, total_debt, cash_equivalents)
 
+# ---------------------------------
+# Calculate Fair Value
+# ---------------------------------
+
 def fair_value_per_share(equity_value, shares_outstanding):
     return equity_value / shares_outstanding
 
@@ -203,9 +239,10 @@ fair_price_base_exit = fair_value_per_share(equity_base_exit, shares_outstanding
 fair_price_bear_ggm = fair_value_per_share(equity_bear_ggm, shares_outstanding)
 fair_price_bear_exit = fair_value_per_share(equity_bear_exit, shares_outstanding)
 
-# Assuming the fair prices are stored in DataFrames/Series, we will extract the scalar values
+# ---------------------------------
+# Convert from Series to Scalar
+# ---------------------------------
 
-# For example, if fair_price_bull_ggm is a pandas Series or DataFrame, you need to access the actual value:
 fair_price_bull_ggm_value = fair_price_bull_ggm.iloc[0] if isinstance(fair_price_bull_ggm, pd.Series) else fair_price_bull_ggm
 fair_price_base_ggm_value = fair_price_base_ggm.iloc[0] if isinstance(fair_price_base_ggm, pd.Series) else fair_price_base_ggm
 fair_price_bear_ggm_value = fair_price_bear_ggm.iloc[0] if isinstance(fair_price_bear_ggm, pd.Series) else fair_price_bear_ggm
@@ -214,10 +251,13 @@ fair_price_bull_exit_value = fair_price_bull_exit.iloc[0] if isinstance(fair_pri
 fair_price_base_exit_value = fair_price_base_exit.iloc[0] if isinstance(fair_price_base_exit, pd.Series) else fair_price_base_exit
 fair_price_bear_exit_value = fair_price_bear_exit.iloc[0] if isinstance(fair_price_bear_exit, pd.Series) else fair_price_bear_exit
 
+# ---------------------------------
+# Upside Calculation
+# ---------------------------------
+
 def calculate_upside(fair_price, current_price):
     return (fair_price - current_price) / current_price * 100
 
-# Now calculate upside using scalar values
 upside_bull_ggm = calculate_upside(fair_price_bull_ggm_value, current_price)
 upside_base_ggm = calculate_upside(fair_price_base_ggm_value, current_price)
 upside_bear_ggm = calculate_upside(fair_price_bear_ggm_value, current_price)
@@ -225,6 +265,10 @@ upside_bear_ggm = calculate_upside(fair_price_bear_ggm_value, current_price)
 upside_bull_exit = calculate_upside(fair_price_bull_exit_value, current_price)
 upside_base_exit = calculate_upside(fair_price_base_exit_value, current_price)
 upside_bear_exit = calculate_upside(fair_price_bear_exit_value, current_price)
+
+# ---------------------------------
+# Weighted Upside Calculation
+# ---------------------------------
 
 weights = {
     "base": 0.50,

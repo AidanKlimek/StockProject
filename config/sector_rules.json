@@ -5,8 +5,7 @@
     "P/E": 25,
     "P/B": 5,
     "dcf_weight": 0.60,
-    "comps_weight": 0.40,
-    "notes": "EV/EBITDA dominates due to capex intensity; P/B rarely used."
+    "comps_weight": 0.40
   },
   "Basic Materials": {
     "EV/EBITDA": 70,
@@ -14,8 +13,7 @@
     "EV/Revenue": 25,
     "P/B": 0,
     "dcf_weight": 0.65,
-    "comps_weight": 0.35,
-    "notes": "EV/EBITDA is key; P/B less relevant."
+    "comps_weight": 0.35
   },
   "Technology": {
     "EV/EBITDA": 40,
@@ -23,8 +21,7 @@
     "P/E": 10,
     "P/B": 5,
     "dcf_weight": 0.70,
-    "comps_weight": 0.30,
-    "notes": "EV/Revenue weighted heavily for growth-stage firms."
+    "comps_weight": 0.30
   },
   "Financial Services": {
     "P/E": 40,
@@ -32,8 +29,7 @@
     "EV/EBITDA": 0,
     "EV/Revenue": 0,
     "dcf_weight": 0.30,
-    "comps_weight": 0.70,
-    "notes": "P/B is critical for banks; EV multiples irrelevant."
+    "comps_weight": 0.70
   },
   "Healthcare": {
     "EV/EBITDA": 40,
@@ -41,8 +37,7 @@
     "P/E": 10,
     "P/B": 5,
     "dcf_weight": 0.60,
-    "comps_weight": 0.40,
-    "notes": "EV/Revenue for biotech; EV/EBITDA for pharma."
+    "comps_weight": 0.40
   },
   "Communication Services": {
     "EV/EBITDA": 50,
@@ -66,8 +61,7 @@
     "EV/Revenue": 15,
     "P/B": 5,
     "dcf_weight": 0.60,
-    "comps_weight": 0.40,
-    "notes": "Stable cash flows favor EV/EBITDA and P/E."
+    "comps_weight": 0.40
   },
   "Real Estate": {
     "EV/EBITDA": 40,
@@ -83,8 +77,7 @@
     "EV/Revenue": 10,
     "P/B": 10,
     "dcf_weight": 0.65,
-    "comps_weight": 0.35,
-    "notes": "EV/EBITDA is king in capex-heavy sectors."
+    "comps_weight": 0.35
   },
   "Utilities": {
     "EV/EBITDA": 50,
@@ -100,7 +93,6 @@
     "P/E": 20,
     "P/B": 10,
     "dcf_weight": 0.50,
-    "comps_weight": 0.50,
-    "notes": "Fallback weights if industry not specified."
+    "comps_weight": 0.50
   }
 }
